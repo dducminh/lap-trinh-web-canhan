@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Buổi 8 - Fetch API JSON</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f8f9fa; padding: 25px; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+        th { background: #f1f3f5; }
+        #loading { color: #007bff; font-weight: bold; display: none; }
+        #error-msg { color: #dc3545; font-weight: bold; display: none; padding: 10px; background: #f8d7da; border-radius: 4px; }
+        button { padding: 8px 16px; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Danh Sách Sự Kiện (Tải bất đồng bộ qua Fetch API)</h2>
+    <button onclick="loadEvents()">Tải lại dữ liệu</button>
+
+    <div id="loading" style="margin-top: 10px;">⏳ Đang tải dữ liệu từ máy chủ...</div>
+    <div id="error-msg" style="margin-top: 10px;"></div>
+
+    <table id="event-table" style="display: none;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tên Sự Kiện</th>
+                <th>CLB</th>
+                <th>Ngày Tổ Chức</th>
+                <th>Số Lượng</th>
+            </tr>
+        </thead>
+        <tbody id="event-tbody"></tbody>
+    </table>
+</div>
+
+<script>
+async function loadEvents() {
+    const loading = document.getElementById('loading');
+    const errorMsg = document.getElementById('error-msg');
+    const table = document.getElementById('event-table');
+    const tbody = document.getElementById('event-tbody');
+
+    loading.style.display = 'block';
+    errorMsg.style.display = 'none';
+    table.style.display = 'none';
+    tbody.innerHTML = '';
+
+    try {
+        const res = await fetch('api_events.php');
+        if (!res.ok) {
+            throw new Error(`HTTP Lỗi! Mã lỗi: ${res.status}`);
+        }
+        const result = await res.json();
+
+        if (result.status === 'success') {
+            result.data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.id}</td>
+                    <td><strong>${item.title}</strong></td>
+                    <td>${item.club_name}</td>
+                    <td>${item.event_date}</td>
+                    <td>${item.registered_count} / ${item.max_participants}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            table.style.display = 'table';
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (err) {
+        errorMsg.innerText = 'Lỗi tải dữ liệu: ' + err.message;
+        errorMsg.style.display = 'block';
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+// Gọi tự động khi tải trang
+loadEvents();
+</script>
+</body>
+</html>

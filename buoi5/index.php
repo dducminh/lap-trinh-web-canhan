@@ -1,9 +1,9 @@
 <?php
 // 1. KẾT NỐI DATABASE BẰNG PDO
-$host = 'localhost';
+$host = '127.0.0.1'; // hoặc 'localhost'
 $dbname = 'web_canhan';
 $username = 'root';
-$password = '';
+$password = '123456';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
