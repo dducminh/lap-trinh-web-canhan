@@ -2,84 +2,174 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Buổi 8 - Fetch API JSON</title>
+    <title>Buổi 8 - Single Page CRUD qua Fetch API</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f8f9fa; padding: 25px; }
-        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; padding: 25px; margin: 0; }
+        .container { max-width: 950px; margin: auto; background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2, h3 { color: #333; margin-top: 0; }
+        .form-box { background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; border: 1px solid #e9ecef; }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        input { flex: 1; padding: 9px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; }
+        button { padding: 9px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+        .btn-primary { background: #007bff; color: #fff; }
+        .btn-success { background: #28a745; color: #fff; }
+        .btn-danger { background: #dc3545; color: #fff; padding: 4px 8px; font-size: 13px; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
-        th { background: #f1f3f5; }
-        #loading { color: #007bff; font-weight: bold; display: none; }
-        #error-msg { color: #dc3545; font-weight: bold; display: none; padding: 10px; background: #f8d7da; border-radius: 4px; }
-        button { padding: 8px 16px; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        th { background: #f1f3f5; color: #495057; }
+        #loading { display: none; color: #007bff; font-weight: bold; margin: 10px 0; }
+        #alert-box { display: none; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-weight: 500; }
+        .alert-success { background: #d4edda; color: #155724; }
+        .alert-error { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>Danh Sách Sự Kiện (Tải bất đồng bộ qua Fetch API)</h2>
-    <button onclick="loadEvents()">Tải lại dữ liệu</button>
+    <h2>Hệ Thống Sự Kiện - Tương Tác Bất Đồng Bộ (Fetch API)</h2>
+    <div id="alert-box"></div>
 
-    <div id="loading" style="margin-top: 10px;">⏳ Đang tải dữ liệu từ máy chủ...</div>
-    <div id="error-msg" style="margin-top: 10px;"></div>
+    <!-- Form thêm mới không tải lại trang -->
+    <div class="form-box">
+        <h3>Thêm Nhanh Sự Kiện (Async Post)</h3>
+        <form id="addEventForm" onsubmit="createEvent(event)">
+            <div class="form-row">
+                <input type="text" id="title" placeholder="Tên sự kiện..." required>
+                <input type="text" id="club_name" placeholder="CLB tổ chức..." required>
+            </div>
+            <div class="form-row">
+                <input type="date" id="event_date" required>
+                <input type="number" id="max_participants" placeholder="Giới hạn người (VD: 100)" min="1" required>
+                <input type="number" id="registered_count" placeholder="Đã ĐK (VD: 10)" min="0" value="0" required>
+            </div>
+            <button type="submit" class="btn-success">Thêm ngay (Fetch Post)</button>
+        </form>
+    </div>
 
-    <table id="event-table" style="display: none;">
+    <!-- Thanh công cụ tìm kiếm và làm mới -->
+    <div class="toolbar">
+        <input type="text" id="searchInput" placeholder="Gõ từ khóa để tìm kiếm ngay..." style="max-width: 350px;" oninput="filterEvents()">
+        <button onclick="loadEvents()" class="btn-primary">Tải lại dữ liệu</button>
+    </div>
+
+    <div id="loading">⏳ Đang đồng bộ dữ liệu với Server...</div>
+
+    <!-- Bảng danh sách sự kiện -->
+    <table id="eventTable">
         <thead>
             <tr>
                 <th>ID</th>
                 <th>Tên Sự Kiện</th>
-                <th>CLB</th>
-                <th>Ngày Tổ Chức</th>
-                <th>Số Lượng</th>
+                <th>CLB Tổ Chức</th>
+                <th>Ngày Diễn Ra</th>
+                <th>Số Lượng (Đã ĐK / Tối Đa)</th>
             </tr>
         </thead>
-        <tbody id="event-tbody"></tbody>
+        <tbody id="eventTbody"></tbody>
     </table>
 </div>
 
 <script>
+let eventCache = [];
+
+function showAlert(msg, isSuccess = true) {
+    const box = document.getElementById('alert-box');
+    box.className = isSuccess ? 'alert-success' : 'alert-error';
+    box.innerText = msg;
+    box.style.display = 'block';
+    setTimeout(() => { box.style.display = 'none'; }, 3500);
+}
+
+// 1. GET: Nạp danh sách qua Fetch API
 async function loadEvents() {
     const loading = document.getElementById('loading');
-    const errorMsg = document.getElementById('error-msg');
-    const table = document.getElementById('event-table');
-    const tbody = document.getElementById('event-tbody');
-
     loading.style.display = 'block';
-    errorMsg.style.display = 'none';
-    table.style.display = 'none';
-    tbody.innerHTML = '';
 
     try {
         const res = await fetch('api_events.php');
-        if (!res.ok) {
-            throw new Error(`HTTP Lỗi! Mã lỗi: ${res.status}`);
-        }
-        const result = await res.json();
+        if (!res.ok) throw new Error('Mã lỗi HTTP: ' + res.status);
+        const data = await res.json();
 
-        if (result.status === 'success') {
-            result.data.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${item.id}</td>
-                    <td><strong>${item.title}</strong></td>
-                    <td>${item.club_name}</td>
-                    <td>${item.event_date}</td>
-                    <td>${item.registered_count} / ${item.max_participants}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-            table.style.display = 'table';
+        if (data.status === 'success') {
+            eventCache = data.data;
+            renderTable(eventCache);
         } else {
-            throw new Error(result.message);
+            throw new Error(data.message);
         }
     } catch (err) {
-        errorMsg.innerText = 'Lỗi tải dữ liệu: ' + err.message;
-        errorMsg.style.display = 'block';
+        showAlert('Lỗi tải dữ liệu: ' + err.message, false);
     } finally {
         loading.style.display = 'none';
     }
 }
 
-// Gọi tự động khi tải trang
+// 2. Render danh sách vào DOM HTML
+function renderTable(list) {
+    const tbody = document.getElementById('eventTbody');
+    tbody.innerHTML = '';
+    if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Không có dữ liệu phù hợp.</td></tr>';
+        return;
+    }
+    list.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${item.id}</td>
+            <td><strong>${escapeHtml(item.title)}</strong></td>
+            <td>${escapeHtml(item.club_name)}</td>
+            <td>${item.event_date}</td>
+            <td>${item.registered_count} / ${item.max_participants}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// 3. POST: Thêm sự kiện mới không tải lại trang
+async function createEvent(e) {
+    e.preventDefault();
+    const payload = {
+        title: document.getElementById('title').value,
+        club_name: document.getElementById('club_name').value,
+        event_date: document.getElementById('event_date').value,
+        max_participants: document.getElementById('max_participants').value,
+        registered_count: document.getElementById('registered_count').value
+    };
+
+    try {
+        const res = await fetch('api_events.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+            showAlert('Thêm sự kiện thành công!');
+            document.getElementById('addEventForm').reset();
+            loadEvents();
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (err) {
+        showAlert('Lỗi gửi form: ' + err.message, false);
+    }
+}
+
+// 4. Live Search: Lọc trực tiếp ngay khi gõ
+function filterEvents() {
+    const kw = document.getElementById('searchInput').value.toLowerCase().trim();
+    const filtered = eventCache.filter(item => 
+        item.title.toLowerCase().includes(kw) || 
+        item.club_name.toLowerCase().includes(kw)
+    );
+    renderTable(filtered);
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.innerText = text;
+    return div.innerHTML;
+}
+
 loadEvents();
 </script>
 </body>
